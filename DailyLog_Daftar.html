@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Daftar akun | DailyLog</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#F4F6F8;--card:#fff;--ink:#17202C;--mute:#667085;--line:#E3E7EC;--acc:#0E7C86;--accbg:#DDF1F2;--danger:#C0392B;--ok:#16A34A;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root{--bg:#0F141B;--card:#18202A;--ink:#EEF1F5;--mute:#98A2B3;--line:#2A3441;--acc:#4FC3CC;--accbg:#173238;--danger:#F08A7E;--ok:#4ADE80}}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family:"Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:15px;line-height:1.5}
+main{max-width:520px;margin:0 auto;padding:18px 16px 40px}
+.logo{display:inline-flex;align-items:center;gap:6px;font-weight:800;font-size:18px;letter-spacing:-.3px;color:var(--ink)}
+.logo svg{color:var(--acc)}
+.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}
+.top a.l{color:var(--acc);font-weight:600;text-decoration:none;font-size:14px}
+.hero{background:linear-gradient(135deg,#0B6670,#2F5FA8);color:#fff;border-radius:22px;padding:24px 20px;margin-bottom:14px;box-shadow:0 10px 24px -12px rgba(14,124,134,.7)}
+.hero h1{font-size:26px;font-weight:800;letter-spacing:-.5px;line-height:1.2;margin:0 0 8px}
+.hero p{margin:0 0 16px;opacity:.9}
+.pts{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.pts li{display:flex;gap:10px;align-items:flex-start;background:rgba(255,255,255,.16);border-radius:14px;padding:10px 12px;font-size:14px}
+.pts svg{flex:none;margin-top:1px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:0 1px 2px rgba(16,24,40,.05)}
+h2{font-size:20px;font-weight:800;margin:0 0 2px;letter-spacing:-.3px}
+.mute{color:var(--mute);font-size:13px}
+label{display:block;font-weight:600;font-size:13px;margin:14px 0 5px}
+input[type=text],input[type=email],input[type=password]{width:100%;font:inherit;font-size:16px;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:11px 12px;min-height:46px}
+.pw{position:relative}
+.pw input{padding-right:64px}
+.pw button{position:absolute;right:4px;top:3px;height:40px;padding:0 10px;background:none;border:0;color:var(--acc);font:inherit;font-weight:600;font-size:13px;cursor:pointer}
+.meter{display:flex;gap:4px;margin-top:8px}
+.meter i{flex:1;height:5px;border-radius:4px;background:var(--line)}
+.meter[data-s="1"] i:nth-child(-n+1){background:var(--danger)}
+.meter[data-s="2"] i:nth-child(-n+2){background:#D97706}
+.meter[data-s="3"] i:nth-child(-n+3){background:var(--acc)}
+.meter[data-s="4"] i{background:var(--ok)}
+.err{color:var(--danger);font-size:12px;margin-top:4px;min-height:0}
+.chk{display:flex;gap:10px;align-items:flex-start;margin-top:16px;font-size:13px;color:var(--mute)}
+.chk input{width:20px;height:20px;margin:1px 0 0;flex:none;accent-color:var(--acc)}
+.btn{width:100%;margin-top:16px;border:1px solid var(--acc);background:var(--acc);color:#fff;border-radius:10px;padding:12px 14px;font:inherit;font-weight:700;min-height:48px;cursor:pointer;box-shadow:0 4px 12px -4px var(--acc)}
+.btn[disabled]{opacity:.6;cursor:default}
+.alert{border-radius:12px;padding:10px 12px;margin-top:14px;font-size:13px;display:none}
+.alert.e{display:block;background:#FDECEA;color:#9B2C20}
+@media(prefers-color-scheme:dark){.alert.e{background:#3A1F1C;color:#F6B4AB}}
+.done{display:none;text-align:center;padding:10px 4px}
+.done .ic{width:56px;height:56px;border-radius:50%;background:var(--accbg);color:var(--acc);display:grid;place-items:center;margin:0 auto 12px}
+.done a{display:inline-block;margin-top:14px;background:var(--acc);color:#fff;text-decoration:none;font-weight:700;border-radius:10px;padding:12px 22px}
+.foot{text-align:center;margin-top:16px}
+.foot a{color:var(--acc);font-weight:600;text-decoration:none}
+:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<main>
+  <div class="top">
+    <span class="logo"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4.5"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/></svg>DailyLog</span>
+    <a class="l" href="DailyLog_ver_5.html">Masuk</a>
+  </div>
+
+  <section class="hero">
+    <h1>Catat harimu, di mana saja.</h1>
+    <p>Buat akun gratis agar catatan harianmu tersimpan aman dan bisa dibuka dari perangkat mana pun.</p>
+    <ul class="pts">
+      <li><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Tersimpan di akun, tidak hilang saat ganti HP</li>
+      <li><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Sinkron otomatis antar perangkat</li>
+      <li><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Statistik harian dan bulanan yang rapi</li>
+    </ul>
+  </section>
+
+  <section class="card" aria-labelledby="t">
+    <form id="f" novalidate>
+      <h2 id="t">Buat akun</h2>
+      <p class="mute" style="margin:0">Hanya butuh satu menit.</p>
+
+      <label for="nm">Nama panggilan</label>
+      <input id="nm" type="text" maxlength="30" autocomplete="given-name">
+      <div class="err" id="e-nm"></div>
+
+      <label for="em">Email</label>
+      <input id="em" type="email" inputmode="email" autocomplete="username" autocapitalize="none">
+      <div class="err" id="e-em"></div>
+
+      <label for="pw">Kata sandi</label>
+      <div class="pw">
+        <input id="pw" type="password" autocomplete="new-password">
+        <button type="button" id="sh" aria-label="Tampilkan kata sandi">Lihat</button>
+      </div>
+      <div class="meter" id="mt" data-s="0" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+      <div class="mute" id="mh" style="margin-top:6px">Minimal 8 karakter, campurkan huruf dan angka.</div>
+      <div class="err" id="e-pw"></div>
+
+      <label class="chk" for="ag"><input id="ag" type="checkbox"><span>Saya setuju data catatan saya disimpan di akun ini agar bisa disinkronkan antar perangkat.</span></label>
+      <div class="err" id="e-ag"></div>
+
+      <div class="alert" id="al" role="alert"></div>
+      <button class="btn" id="go" type="submit">Daftar sekarang</button>
+    </form>
+
+    <div class="done" id="ok" role="status">
+      <div class="ic"><svg viewBox="0 0 24 24" width="28" height="28" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></div>
+      <h2 id="ok-t">Akun berhasil dibuat</h2>
+      <p class="mute" id="ok-p"></p>
+      <a href="DailyLog_ver_5.html">Lanjut ke DailyLog</a>
+    </div>
+  </section>
+
+  <p class="foot mute">Sudah punya akun? <a href="DailyLog_ver_5.html">Masuk</a></p>
+</main>
+
+<script>
+const SB_URL='https://gkdymzxozpirnnnzttnf.supabase.co', SB_KEY='sb_publishable_1pYQjnb-omNJq2kmw1uP6Q_Jxo9alj9';
+const $=id=>document.getElementById(id);
+const setErr=(k,m)=>{ $('e-'+k).textContent=m||''; };
+
+$('sh').onclick=()=>{ const p=$('pw'), s=p.type==='password'; p.type=s?'text':'password'; $('sh').textContent=s?'Sembunyi':'Lihat'; $('sh').setAttribute('aria-label',s?'Sembunyikan kata sandi':'Tampilkan kata sandi'); };
+
+function strength(v){
+  let s=0; if(v.length>=8) s++; if(/[a-z]/.test(v)&&/[A-Z]/.test(v)) s++; if(/\d/.test(v)) s++; if(/[^A-Za-z0-9]/.test(v)||v.length>=12) s++;
+  return v?Math.max(1,s):0;
+}
+$('pw').addEventListener('input',()=>{ const s=strength($('pw').value); $('mt').dataset.s=s; $('mh').textContent=['Minimal 8 karakter, campurkan huruf dan angka.','Lemah','Cukup','Baik','Kuat'][s]; });
+
+function validate(){
+  const n=$('nm').value.trim(), e=$('em').value.trim(), p=$('pw').value; let ok=true;
+  setErr('nm', n.length<2 ? (ok=false,'Nama minimal 2 huruf.') : '');
+  setErr('em', !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e) ? (ok=false,'Masukkan alamat email yang valid.') : '');
+  setErr('pw', (p.length<8||!/[A-Za-z]/.test(p)||!/\d/.test(p)) ? (ok=false,'Minimal 8 karakter, berisi huruf dan angka.') : '');
+  setErr('ag', !$('ag').checked ? (ok=false,'Centang persetujuan untuk melanjutkan.') : '');
+  return ok;
+}
+
+function showAlert(m){ const a=$('al'); a.textContent=m; a.className='alert e'; }
+
+$('f').addEventListener('submit', async ev=>{
+  ev.preventDefault(); $('al').className='alert';
+  if(!validate()) return;
+  const btn=$('go'); btn.disabled=true; btn.textContent='Mendaftarkan...';
+  const email=$('em').value.trim(), name=$('nm').value.trim();
+  try{
+    const r=await fetch(SB_URL+'/auth/v1/signup',{method:'POST',headers:{apikey:SB_KEY,'Content-Type':'application/json'},body:JSON.stringify({email,password:$('pw').value,data:{name}})});
+    const j=await r.json().catch(()=>({}));
+    const m=String(j.msg||j.message||j.error_description||'').toLowerCase();
+    if(!r.ok){
+      if(m.includes('already')||j.error_code==='user_already_exists') showAlert('Email ini sudah terdaftar. Silakan masuk dengan akun tersebut.');
+      else if(m.includes('password')) showAlert('Kata sandi ditolak: terlalu lemah atau terlalu umum. Coba yang lebih panjang.');
+      else if(r.status===429||m.includes('rate')) showAlert('Terlalu banyak percobaan. Tunggu sebentar lalu coba lagi.');
+      else showAlert('Pendaftaran gagal'+(j.msg||j.message?': '+(j.msg||j.message):'.'));
+      return;
+    }
+    // Supabase mengembalikan identities kosong jika email sudah ada (proteksi enumerasi)
+    if(j.user&&Array.isArray(j.user.identities)&&j.user.identities.length===0){ showAlert('Email ini sudah terdaftar. Silakan masuk dengan akun tersebut.'); return; }
+    $('f').style.display='none'; $('ok').style.display='block';
+    $('ok-p').textContent = j.access_token
+      ? 'Selamat datang, '+name+'. Akunmu sudah aktif, silakan masuk dengan email dan kata sandi tadi.'
+      : 'Kami mengirim tautan konfirmasi ke '+email+'. Buka email itu dulu, lalu masuk ke DailyLog.';
+    try{ localStorage.setItem('dailylog:name',name); }catch(e){}
+    $('ok').scrollIntoView({block:'center'});
+  }catch(x){
+    showAlert('Tidak bisa terhubung ke server. Periksa koneksi internet lalu coba lagi.');
+  }finally{
+    btn.disabled=false; btn.textContent='Daftar sekarang';
+  }
+});
+</script>
+</body>
+</html>
