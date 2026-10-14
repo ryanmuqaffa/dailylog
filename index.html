@@ -550,7 +550,7 @@ function compareHTML(){
 
 /* ===== BAGIAN 4D: PENYIMPANAN DI AKUN (db) & UNDUHAN ===== */
 // Data tiap bulan disimpan sebagai satu dokumen pribadi, pengaturan sebagai dokumen terpisah.
-const SB_URL = 'https://gkdymzxozpirnnnzttnf.supabase.co', SB_KEY = 'sb_publishable_1pYQjnb-omNJq2kmw1uP6Q_Jxo9alj9', SBKEY = 'dailylog:sb';
+const SB_URL = 'https://gkdymzxozpirnnnzttnf.supabase.co', SB_KEY = 'sb_publishable_1pYQjnb-omNJq2kmw1uP6Q_Jxo9alj9', SBKEY = 'dailylog:sb', RESET_URL = 'https://ryanmuqaffa.github.io/dailylog/', RESET_BY_CODE = false;   // RESET_BY_CODE=true hanya jika templat email Supabase sudah berisi {{ .Token }} (butuh SMTP kustom)
 const Cloud = { st:'off', sess:null, gen:0, timer:null, retry:0, rev:0, busy:null, again:false, ctls:new Set() };
 // gen = nomor "sesi akun". Naik setiap login/logout; hasil operasi lama (gen berbeda) dibuang dan tidak menyentuh data sesi baru.
 const fetchT = (url, opt, ms) => { const c = new AbortController(); Cloud.ctls.add(c); const t = setTimeout(()=>c.abort(), ms||20000); return fetch(url, { ...opt, signal:c.signal }).finally(()=>{ clearTimeout(t); Cloud.ctls.delete(c); }); };
@@ -596,7 +596,7 @@ function adoptSettings(s){
   try{ localStorage.setItem(skey(),JSON.stringify(settings)); }catch(e){}
 }
 // Hanya dialog yang memegang referensi ke daftar catatan yang menunda sinkronisasi (dialog nama/klaim tidak).
-const editingModal = () => !!modal && ['form','entry','del','delcat','hidecfm','clear','backup','cat'].includes(modal.type);
+const editingModal = () => !!modal && ['form','entry','del','delcat','hidecfm','clear','backup','cat','newpw','forgot'].includes(modal.type);
 const softRender = () => { if(!modal) render(); else { const top = document.querySelector('.top'); if(top) top.outerHTML = topbar(); } };
 function askName(){ try{ if(!settings.name && !localStorage.getItem('dailylog:noname') && !modal){ modal = { type:'name', first:true }; render(); } }catch(e){} }
 
@@ -1002,10 +1002,16 @@ function loginSheet(){
 function forgotSheet(){
   const er = errors.forgot ? `<div class="err" role="alert">${esc(errors.forgot)}</div>` : '';
   if(modal.step!==2) return `<div class="ov" data-act="close"><div class="sheet"><h1 style="font-size:20px">Lupa kata sandi</h1>
-  <p class="mute">Masukkan email akun Anda. Kami kirim kode verifikasi ke email itu.</p>
+  <p class="mute">Masukkan email akun Anda. Kami kirim ${RESET_BY_CODE ? 'kode verifikasi' : 'tautan untuk mengatur ulang kata sandi'} ke email itu.</p>
   <label for="fg-e">Email</label><input id="fg-e" type="email" inputmode="email" autocomplete="username" autocapitalize="none" value="${esc(modal.email||'')}">
   ${er}
-  <div class="acts" style="margin-top:14px"><button class="btn pri grow" data-act="sendotp">Kirim kode</button><button class="btn" data-act="openlogin">Kembali</button></div></div></div>`;
+  <div class="acts" style="margin-top:14px"><button class="btn pri grow" data-act="sendotp">${RESET_BY_CODE ? 'Kirim kode' : 'Kirim tautan'}</button><button class="btn" data-act="openlogin">Kembali</button></div></div></div>`;
+  if(!RESET_BY_CODE) return `<div class="ov"><div class="sheet"><h1 style="font-size:20px">Cek email Anda</h1>
+  <p class="mute">Jika ${esc(modal.email)} terdaftar, tautan untuk mengatur ulang kata sandi sudah dikirim. Cek juga folder spam.</p>
+  <div class="card"><ol style="margin:0;padding-left:20px;line-height:1.6"><li>Buka email berjudul "Reset your password".</li><li>Ketuk tautan <b>Reset password</b>. Tautan terbuka di browser.</li><li>Isi kata sandi baru di halaman itu, lalu kembali ke aplikasi dan masuk.</li></ol></div>
+  ${er}
+  <div class="acts" style="margin-top:14px"><button class="btn pri grow" data-act="openlogin">Ke halaman Masuk</button><button class="btn" data-act="close">Tutup</button></div>
+  <p class="mute" style="text-align:center;margin:14px 0 0">Email belum masuk? <button class="q" data-act="resendotp" style="background:none;color:var(--acc);padding:4px 6px">Kirim ulang</button></p></div></div>`;
   const hasTok = !!modal.tok;
   return `<div class="ov"><div class="sheet"><h1 style="font-size:20px">Atur kata sandi baru</h1>
   <p class="mute">${hasTok ? 'Kode sudah diterima. Tinggal isi kata sandi baru.' : 'Jika ' + esc(modal.email) + ' terdaftar, kode verifikasi sudah dikirim. Cek juga folder spam. Kode hanya berlaku sebentar.'}</p>
@@ -1022,15 +1028,30 @@ async function sendRecover(email, step){
   const keep = step===2 ? { code:(document.getElementById('fg-c')||{}).value||'' } : {};
   const back = msg => { document.querySelector('.toast')?.remove(); modal = { type:'forgot', step, email, ...keep }; errors = { forgot:msg }; render(); };
   try{
-    const r = await fetch(SB_URL+'/auth/v1/recover', { method:'POST', headers:{ apikey:SB_KEY, 'Content-Type':'application/json' }, body:JSON.stringify({ email }) });
+    const r = await fetch(SB_URL+'/auth/v1/recover?redirect_to='+encodeURIComponent(RESET_URL), { method:'POST', headers:{ apikey:SB_KEY, 'Content-Type':'application/json' }, body:JSON.stringify({ email }) });
     const j = await r.json().catch(()=>({}));
     const m = String(j.msg||j.message||j.error_code||'').toLowerCase();
-    if(r.status===429 || m.includes('rate') || m.includes('seconds')) return back('Terlalu sering meminta kode. Tunggu sekitar satu menit lalu coba lagi.');
-    if(!r.ok) return back('Gagal mengirim kode (kode ' + r.status + '). Coba lagi nanti.');
+    if(r.status===429 || m.includes('rate') || m.includes('seconds')) return back('Terlalu sering meminta email reset. Tunggu beberapa menit lalu coba lagi. Batas kirim email Supabase kecil.');
+    if(!r.ok) return back('Gagal mengirim email reset (kode ' + r.status + '). Coba lagi nanti.');
     modal = { type:'forgot', step:2, email }; errors = {}; render();
-    toast(step===2 ? 'Kode baru sudah dikirim. Cek email Anda.' : 'Kode sudah dikirim. Cek email Anda.');
+    const w = RESET_BY_CODE ? 'Kode' : 'Tautan'; toast(step===2 ? w+' baru sudah dikirim. Cek email Anda.' : w+' sudah dikirim. Cek email Anda.');
   }catch(e){ back('Tidak bisa terhubung ke server. Periksa koneksi internet Anda lalu coba lagi.'); }
   finally{ authBusy = false; }
+}
+function newpwSheet(){
+  if(modal.bad) return `<div class="ov"><div class="sheet"><h1 style="font-size:20px">Tautan tidak berlaku</h1>
+  <p class="mute">${esc(modal.bad)} Minta tautan baru lewat Lupa kata sandi.</p>
+  <div class="acts" style="margin-top:14px"><button class="btn pri grow" data-act="openforgot">Minta tautan baru</button><button class="btn" data-act="close">Tutup</button></div></div></div>`;
+  if(modal.done) return `<div class="ov"><div class="sheet"><h1 style="font-size:20px">Kata sandi diubah</h1>
+  <p class="mute">Kata sandi Anda sudah diperbarui. Buka aplikasi DailyLog lalu masuk dengan kata sandi baru. Anda juga bisa masuk di sini.</p>
+  <div class="acts" style="margin-top:14px"><button class="btn pri grow" data-act="loginafter">Masuk</button><button class="btn" data-act="close">Tutup</button></div></div></div>`;
+  return `<div class="ov"><div class="sheet"><h1 style="font-size:20px">Atur kata sandi baru</h1>
+  <p class="mute">Buat kata sandi baru untuk akun DailyLog Anda.</p>
+  <label for="np-p">Kata sandi baru</label><input id="np-p" type="password" autocomplete="new-password">
+  <div class="mute" style="margin-top:4px">Minimal 8 karakter, berisi huruf dan angka.</div>
+  <label for="np-c">Ulangi kata sandi baru</label><input id="np-c" type="password" autocomplete="new-password">
+  ${errors.newpw?`<div class="err" role="alert">${esc(errors.newpw)}</div>`:''}
+  <div class="acts" style="margin-top:14px"><button class="btn pri grow" data-act="savenewpw">Simpan kata sandi</button><button class="btn" data-act="close">Batal</button></div></div></div>`;
 }
 function confirmSheet(msg, act){
   return `<div class="ov" data-act="close"><div class="sheet"><h1 style="font-size:20px">${msg}</h1><p class="mute">Tindakan ini tidak dapat dibatalkan.</p>
@@ -1048,7 +1069,7 @@ function render(){
     : `<button class="${view===k?'on':''}" data-act="nav" data-v="${k}"><b>${icon(k)}</b>${l}</button>`).join('');
   const m = document.getElementById('modal');
   m.innerHTML = !modal ? '' : modal.type==='form' ? formSheet()
-    : modal.type==='entry' ? entrySheet() : modal.type==='delcat' ? confirmSheet('Hapus kategori ini? Catatannya dipindah ke Lainnya.','dodelcat') : modal.type==='name' ? nameSheet() : modal.type==='claim' ? claimSheet() : modal.type==='login' ? loginSheet() : modal.type==='forgot' ? forgotSheet() : modal.type==='register' ? registerSheet() : modal.type==='hidecfm' ? confirmSheet('Hapus kategori ini dari daftar? Catatan lamanya tetap tersimpan, dan kategori bisa ditambahkan lagi lewat + Tambah kategori.','dohidecat') : modal.type==='cat' ? catSheet() : modal.type==='backup' ? backupSheet() : modal.type==='del' ? confirmSheet('Hapus catatan ini?','dodel') : confirmSheet('Hapus semua data?','doclear');
+    : modal.type==='entry' ? entrySheet() : modal.type==='delcat' ? confirmSheet('Hapus kategori ini? Catatannya dipindah ke Lainnya.','dodelcat') : modal.type==='name' ? nameSheet() : modal.type==='claim' ? claimSheet() : modal.type==='login' ? loginSheet() : modal.type==='forgot' ? forgotSheet() : modal.type==='newpw' ? newpwSheet() : modal.type==='register' ? registerSheet() : modal.type==='hidecfm' ? confirmSheet('Hapus kategori ini dari daftar? Catatan lamanya tetap tersimpan, dan kategori bisa ditambahkan lagi lewat + Tambah kategori.','dohidecat') : modal.type==='cat' ? catSheet() : modal.type==='backup' ? backupSheet() : modal.type==='del' ? confirmSheet('Hapus catatan ini?','dodel') : confirmSheet('Hapus semua data?','doclear');
 }
 
 /* ===== BAGIAN 7: AKSI PENGGUNA ===== */
@@ -1113,6 +1134,33 @@ const actions = {
   skipname:()=>{ try{ localStorage.setItem('dailylog:noname','1'); }catch(e){} modal = null; errors = {}; render(); },
   openlogin:()=>{ modal={type:'login'}; errors={}; render(); },
   openreg:()=>{ modal={ type:'register' }; errors={}; render(); },
+  loginafter:()=>{ const e = (modal && modal.email) || ''; modal={ type:'login', email:e }; errors={}; render(); },
+  savenewpw:async()=>{
+    if(!document.getElementById('np-p') || !modal || modal.type!=='newpw') return;
+    const pw = val('np-p'), pc = val('np-c'), tok = modal.tok;
+    const fail = msg => { authBusy = false; document.querySelector('.toast')?.remove(); modal = { type:'newpw', tok }; errors = { newpw:msg }; render(); };
+    if(pw.length<8 || !/[A-Za-z]/.test(pw) || !/\d/.test(pw)) return fail('Kata sandi minimal 8 karakter, berisi huruf dan angka.');
+    if(pw!==pc) return fail('Kedua kata sandi tidak sama.');
+    if(authBusy) return;
+    authBusy = true; toast('Menyimpan kata sandi...', null, 30000);
+    try{
+      const r = await fetch(SB_URL+'/auth/v1/user', { method:'PUT', headers:{ apikey:SB_KEY, Authorization:'Bearer '+tok, 'Content-Type':'application/json' }, body:JSON.stringify({ password:pw }) });
+      const j = await r.json().catch(()=>({}));
+      if(!r.ok){
+        const m = String(j.msg||j.message||j.error_code||'').toLowerCase();
+        if(r.status===401 || r.status===403){ document.querySelector('.toast')?.remove(); modal = { type:'newpw', bad:'Tautan sudah kedaluwarsa atau sudah pernah dipakai.' }; errors = {}; render(); return; }
+        return fail(m.includes('same') || m.includes('different') ? 'Kata sandi baru harus berbeda dari yang lama.'
+          : r.status===429 ? 'Terlalu banyak percobaan. Tunggu sebentar lalu coba lagi.'
+          : m.includes('weak') || m.includes('password') ? 'Kata sandi ditolak: terlalu lemah atau terlalu umum. Coba kata sandi lain.'
+          : 'Gagal menyimpan kata sandi baru (kode ' + r.status + '). Coba lagi.');
+      }
+      try{ fetch(SB_URL+'/auth/v1/logout?scope=local', { method:'POST', keepalive:true, headers:{ apikey:SB_KEY, Authorization:'Bearer '+tok } }).catch(()=>{}); }catch(e){}
+      document.querySelector('.toast')?.remove();
+      modal = { type:'newpw', done:true, email:String(j.email||'') }; errors = {}; render();
+    }catch(e){ fail('Tidak bisa terhubung ke server. Periksa koneksi internet Anda lalu coba lagi.'); }
+    finally{ authBusy = false; }
+  },
+
   openforgot:()=>{ const e = document.getElementById('lg-e'); modal={ type:'forgot', step:1, email:e?e.value.trim():'' }; errors={}; render(); },
   sendotp:async()=>{
     if(!document.getElementById('fg-e')) return;
@@ -1315,7 +1363,7 @@ document.addEventListener('click', ev=>{
   if(t && t.classList.contains('ov') && ev.target!==t) return; // klik di dalam kotak dialog tidak menutupnya
   if(t && actions[t.dataset.act]) actions[t.dataset.act](t);
 });
-document.addEventListener('keydown', ev=>{ if(ev.key==='Escape' && modal){ modal=null; errors={}; render(); } if(ev.key==='Enter' && (ev.target.id==='lg-p'||ev.target.id==='lg-e')) actions.dologin(); if(ev.key==='Enter' && ev.target.id==='nm') actions.savename(); if(ev.key==='Enter' && ev.target.id==='fg-e') actions.sendotp(); if(ev.key==='Enter' && ['fg-c','fg-p'].includes(ev.target.id)) actions.resetpw(); if(ev.key==='Enter' && ['rg-n','rg-e','rg-p'].includes(ev.target.id)) actions.doreg(); });
+document.addEventListener('keydown', ev=>{ if(ev.key==='Escape' && modal){ modal=null; errors={}; render(); } if(ev.key==='Enter' && (ev.target.id==='lg-p'||ev.target.id==='lg-e')) actions.dologin(); if(ev.key==='Enter' && ev.target.id==='nm') actions.savename(); if(ev.key==='Enter' && ev.target.id==='fg-e') actions.sendotp(); if(ev.key==='Enter' && ['np-p','np-c'].includes(ev.target.id)) actions.savenewpw(); if(ev.key==='Enter' && ['fg-c','fg-p'].includes(ev.target.id)) actions.resetpw(); if(ev.key==='Enter' && ['rg-n','rg-e','rg-p'].includes(ev.target.id)) actions.doreg(); });
 document.addEventListener('input', ev=>{
   const t = ev.target; if(t.id!=='f-th' && t.id!=='f-tm') return;
   t.value = t.value.replace(/\D/g,'').slice(0,2);
@@ -1339,6 +1387,15 @@ document.addEventListener('change', ev=>{
 render();
 if(SCOPE==='guest') askName();
 Cloud.init();
+(function(){   // tautan dari email Supabase: reset kata sandi, konfirmasi email, atau tautan kedaluwarsa
+  const h = location.hash || '';
+  if(!/(access_token|error)=/.test(h)) return;
+  const q = new URLSearchParams(h.replace(/^#/,''));
+  try{ history.replaceState(null, '', location.pathname + location.search); }catch(e){}   // buang token dari alamat
+  if(q.get('type')==='recovery' && q.get('access_token')){ modal = { type:'newpw', tok:q.get('access_token') }; errors = {}; render(); }
+  else if(q.get('type')==='signup' && q.get('access_token')){ toast('Email berhasil dikonfirmasi. Silakan masuk.'); }
+  else if(q.get('error')){ modal = { type:'newpw', bad: q.get('error_code')==='otp_expired' ? 'Tautan sudah kedaluwarsa atau sudah pernah dipakai.' : 'Tautan tidak bisa dipakai.' }; errors = {}; render(); }
+})();
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden) Cloud.pull(false); });
 addEventListener('online', ()=>Cloud.sync(false));
 if('serviceWorker' in navigator) addEventListener('load',()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
