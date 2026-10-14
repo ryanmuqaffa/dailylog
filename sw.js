@@ -1,6 +1,6 @@
 // DailyLog service worker: aplikasi tetap bisa dibuka tanpa internet.
 // Ganti angka VERSI setiap kali index.html diperbarui.
-const VERSI = 'dailylog-v3';
+const VERSI = 'dailylog-v5';
 const INTI = ['./', 'index.html', 'manifest.json', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', e => {
