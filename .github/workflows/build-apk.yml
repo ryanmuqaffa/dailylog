@@ -1,0 +1,96 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Ambil kode
+        uses: actions/checkout@v4
+
+      - name: Pasang Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Pasang Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Pasang Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: "platforms;android-36 build-tools;36.0.0"
+
+      - name: Siapkan isi aplikasi web
+        run: |
+          mkdir -p www
+          cp index.html manifest.json sw.js icon-192.png icon-512.png www/
+
+      - name: Tambah penampil error (sementara)
+        run: |
+          python3 - <<'PY'
+          p = 'www/index.html'
+          s = open(p, encoding='utf-8').read()
+          dbg = """<script>
+          (function(){
+            function show(m){
+              var d = document.getElementById('dbg');
+              if(!d){
+                d = document.createElement('pre'); d.id = 'dbg';
+                d.style.cssText = 'position:fixed;z-index:99999;top:40px;left:0;right:0;max-height:60%;overflow:auto;margin:0;padding:10px;background:#fff;color:#c00;font:12px monospace;white-space:pre-wrap';
+                (document.body || document.documentElement).appendChild(d);
+              }
+              d.textContent += m + '\\n';
+            }
+            window.addEventListener('error', function(e){ show('ERROR: ' + e.message + ' @' + (e.lineno||'?') + ':' + (e.colno||'?')); });
+            window.addEventListener('unhandledrejection', function(e){ show('REJECT: ' + ((e.reason && e.reason.message) || e.reason)); });
+            window.addEventListener('load', function(){ show('Halaman dimuat. Isi #app: ' + ((document.getElementById('app')||{}).innerHTML||'').length + ' karakter'); });
+          })();
+          </script>"""
+          s = s.replace('<head>', '<head>' + dbg, 1)
+          open(p, 'w', encoding='utf-8').write(s)
+          PY
+
+      - name: Buat proyek Android (Capacitor)
+        run: |
+          npm init -y
+          npm install @capacitor/core@8 @capacitor/cli@8 @capacitor/android@8
+          npx cap telemetry off || true
+          npx cap init DailyLog com.ryanmuqaffa.dailylog --web-dir www
+          npx cap add android
+          npx cap sync android
+
+      - name: Pakai ikon DailyLog
+        continue-on-error: true
+        run: |
+          RES=android/app/src/main/res
+          rm -rf $RES/mipmap-anydpi-v26
+          for pair in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
+            d=${pair%%:*}
+            s=${pair##*:}
+            convert icon-512.png -resize ${s}x${s} $RES/mipmap-$d/ic_launcher.png
+            cp $RES/mipmap-$d/ic_launcher.png $RES/mipmap-$d/ic_launcher_round.png
+          done
+
+      - name: Bangun APK
+        working-directory: android
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Ganti nama APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk DailyLog-debug.apk
+
+      - name: Unggah APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: DailyLog-APK
+          path: DailyLog-debug.apk
+          if-no-files-found: error
