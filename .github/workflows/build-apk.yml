@@ -8,7 +8,7 @@ permissions:
 
 jobs:
   build-apk:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
       - name: Ambil kode
@@ -35,31 +35,6 @@ jobs:
           mkdir -p www
           cp index.html manifest.json sw.js icon-192.png icon-512.png www/
 
-      - name: Tambah penampil error (sementara)
-        run: |
-          python3 - <<'PY'
-          p = 'www/index.html'
-          s = open(p, encoding='utf-8').read()
-          dbg = """<script>
-          (function(){
-            function show(m){
-              var d = document.getElementById('dbg');
-              if(!d){
-                d = document.createElement('pre'); d.id = 'dbg';
-                d.style.cssText = 'position:fixed;z-index:99999;top:40px;left:0;right:0;max-height:60%;overflow:auto;margin:0;padding:10px;background:#fff;color:#c00;font:12px monospace;white-space:pre-wrap';
-                (document.body || document.documentElement).appendChild(d);
-              }
-              d.textContent += m + '\\n';
-            }
-            window.addEventListener('error', function(e){ show('ERROR: ' + e.message + ' @' + (e.lineno||'?') + ':' + (e.colno||'?')); });
-            window.addEventListener('unhandledrejection', function(e){ show('REJECT: ' + ((e.reason && e.reason.message) || e.reason)); });
-            window.addEventListener('load', function(){ show('Halaman dimuat. Isi #app: ' + ((document.getElementById('app')||{}).innerHTML||'').length + ' karakter'); });
-          })();
-          </script>"""
-          s = s.replace('<head>', '<head>' + dbg, 1)
-          open(p, 'w', encoding='utf-8').write(s)
-          PY
-
       - name: Buat proyek Android (Capacitor)
         run: |
           npm init -y
@@ -72,6 +47,8 @@ jobs:
       - name: Pakai ikon DailyLog
         continue-on-error: true
         run: |
+          sudo apt-get update -y
+          sudo apt-get install -y imagemagick
           RES=android/app/src/main/res
           rm -rf $RES/mipmap-anydpi-v26
           for pair in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
