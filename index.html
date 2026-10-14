@@ -156,10 +156,6 @@ nav button b,nav button.on b{display:inline-block;line-height:0;padding:5px 18px
 .fb span{display:inline-flex;align-items:center;gap:6px;min-width:0}
 .fb svg{flex:none;color:var(--mute)}
 .fb input,.fb select{position:absolute;inset:0;width:100%;height:100%;min-height:0;opacity:0;padding:0;border:0}
-.ail{margin:4px 0 10px 18px;padding:0}
-.ail li{margin:2px 0}
-.aires p{margin:4px 0 10px}
-.aipre{font-size:11px;overflow:auto;max-height:220px;background:var(--bg);border-radius:8px;padding:8px;margin:8px 0 0;white-space:pre-wrap}
 </style>
 </head>
 <body>
@@ -936,83 +932,8 @@ function viewStats(){
   const tabs = [['day','Harian'],['week','Mingguan'],['month','Bulanan']].map(([k,l])=>`<button class="btn sm grow" style="justify-content:center;${statTab===k?'background:var(--acc);color:#fff;border-color:var(--acc)':''}" data-act="stattab" data-t="${k}">${l}</button>`).join('');
   return `<h1>Statistik</h1><div class="row" style="gap:6px;margin:8px 0 14px">${tabs}</div>`+(statTab==='day'?statsDayBody():statTab==='month'?statsMonthBody():statsWeekBody());
 }
-/* ===== EVALUASI AI (Gemini lewat Edge Function "evaluasi") ===== */
-// Yang dikirim hanya angka ringkasan per kategori. Nama kegiatan dan catatan tidak pernah dikirim.
-// Kunci Gemini tidak ada di halaman ini: ia tersimpan sebagai secret di server.
-// Nama (slug) fungsi di Supabase. Samakan dengan alamat fungsi Anda: .../functions/v1/<nama>
-const AI_FN = 'bright-task';
-const AIS = { busy:false, err:'', last:0, show:false, data:null, key:'' };
-function cleanAiOut(h){
-  if(!h || typeof h!=='object') return null;
-  const t = (v,n) => typeof v==='string' ? v.slice(0,n) : '';
-  const l = a => Array.isArray(a) ? a.map(x=>t(x,240)).filter(Boolean).slice(0,3) : [];
-  const o = { ts:Number.isFinite(+h.ts)?+h.ts:0, dari:/^\d{4}-\d{2}-\d{2}$/.test(h.dari)?h.dari:'', sampai:/^\d{4}-\d{2}-\d{2}$/.test(h.sampai)?h.sampai:'',
-    ringkasan:t(h.ringkasan,420), membaik:l(h.membaik), perhatian:l(h.perhatian), langkah:t(h.langkah,300), refleksi:t(h.refleksi,240) };
-  return o.ringkasan && o.langkah && o.refleksi && o.dari && o.sampai ? o : null;
-}
-function aiData(){
-  const k = scopeKey('ai');
-  if(!AIS.data || AIS.key!==k){
-    AIS.key = k;
-    try{ const j = JSON.parse(localStorage.getItem(k)); AIS.data = { goal:j && typeof j.goal==='string' ? j.goal.slice(0,200) : '', last:j ? cleanAiOut(j.last) : null }; }
-    catch(e){ AIS.data = { goal:'', last:null }; }
-  }
-  return AIS.data;
-}
-const aiSave = () => { try{ localStorage.setItem(scopeKey('ai'), JSON.stringify(AIS.data)); }catch(e){} };
-// Rata-rata jam dihitung melingkar supaya 23.30 dan 00.30 tidak dirata-ratakan menjadi tengah hari.
-function meanClock(list){
-  const a = list.map(t=>{ const [h,m] = String(t).split(':').map(Number); return (h*60+m)/1440*2*Math.PI; }).filter(Number.isFinite);
-  if(!a.length) return null;
-  const x = a.reduce((s,v)=>s+Math.cos(v),0)/a.length, y = a.reduce((s,v)=>s+Math.sin(v),0)/a.length;
-  if(Math.hypot(x,y) < 0.3) return null;   // terlalu menyebar, rata-rata tidak bermakna
-  const mins = Math.round(((Math.atan2(y,x)/(2*Math.PI)*1440)+1440)%1440)%1440;
-  return pad(Math.floor(mins/60))+':'+pad(mins%60);
-}
-function aiPayload(){
-  const d14 = lastDays(14), cur = d14.slice(7), prev = d14.slice(0,7), real = entries.filter(e=>!e.demo);
-  const L = real.filter(e=>cur.includes(e.date)), P = real.filter(e=>prev.includes(e.date));
-  const agg = l => ({ kegiatan:l.length, menit:l.reduce((s,e)=>s+(e.dur||0),0), hariAktif:new Set(l.map(e=>e.date)).size });
-  const t = agg(L), tp = agg(P);
-  const kategori = activeCats().filter(k=>k!=='lainnya').map(k=>{
-    const a = L.filter(e=>e.cat===k), b = P.filter(e=>e.cat===k), x = agg(a), y = agg(b);
-    return { nama:CATS[k][0], hariAktif:x.hariAktif, target:settings.targets[k]||3, menit:x.menit, jamRata:meanClock(a.map(e=>e.time)), prevHariAktif:y.hariAktif, prevMenit:y.menit };
-  });
-  return { periode:{ dari:cur[0], sampai:cur[6] }, tujuan:aiData().goal, total:{ hariAktif:t.hariAktif, kegiatan:t.kegiatan, menit:t.menit, prevHariAktif:tp.hariAktif, prevKegiatan:tp.kegiatan, prevMenit:tp.menit }, kategori };
-}
-async function aiRun(){
-  if(AIS.busy) return;
-  if(!Cloud.sess){ toast('Masuk ke akun dulu untuk memakai evaluasi AI.'); return; }
-  if(Date.now()-AIS.last < 20000){ toast('Tunggu sebentar sebelum membuat lagi.'); return; }
-  const gen = Cloud.gen, p = aiPayload();
-  AIS.busy = true; AIS.err = ''; AIS.last = Date.now(); softRender();
-  try{
-    const tok = await sbToken();
-    const r = await fetchT(SB_URL+'/functions/v1/'+AI_FN, { method:'POST', headers:{ apikey:SB_KEY, Authorization:'Bearer '+tok, 'Content-Type':'application/json' }, body:JSON.stringify(p) }, 40000);
-    const j = await r.json().catch(()=>({}));
-    if(gen!==Cloud.gen) return;
-    if(!r.ok || !j.ok) throw new Error(j.pesan || (r.status===404 ? 'Fungsi evaluasi belum dipasang di server.' : r.status===401 ? 'Sesi berakhir. Masuk lagi.' : 'Gagal membuat evaluasi ('+r.status+').'));
-    const out = cleanAiOut({ ...j.hasil, ts:Date.now(), dari:p.periode.dari, sampai:p.periode.sampai });
-    if(!out) throw new Error('Jawaban AI tidak bisa dibaca. Coba lagi.');
-    aiData().last = out; aiSave();
-  }catch(e){ if(gen===Cloud.gen) AIS.err = e && e.name==='AbortError' ? 'Terlalu lama. Coba lagi nanti.' : ((e && e.message) || 'Gagal membuat evaluasi.'); }
-  finally{ AIS.busy = false; if(gen===Cloud.gen) softRender(); }
-}
-function aiHTML(){
-  const A = aiData(), h = A.last;
-  if(!Cloud.sess) return `<div class="card"><div class="name">Ringkasan AI <span class="bd">opsional</span></div><p class="mute" style="margin:4px 0 0">Penjelasan singkat dari AI memakai akun supaya aman dan pemakaiannya terbatas. Masuk dulu untuk menggunakannya. Saran dari catatan di bawah tetap tersedia tanpa akun.</p><button class="btn pri" style="margin-top:10px" data-act="openlogin">Masuk</button></div>`;
-  const li = a => a.length ? `<ul class="ail">${a.map(x=>`<li>${esc(x)}</li>`).join('')}</ul>` : '';
-  const when = h ? new Date(h.ts).toLocaleString('id-ID',{ day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }) : '';
-  const res = h ? `<div class="aires" style="border-top:1px solid var(--line);margin-top:14px;padding-top:12px"><div class="mute" style="font-size:12px">Periode ${fmtShort(h.dari)} - ${fmtShort(h.sampai)} • dibuat ${when}</div><p>${esc(h.ringkasan)}</p>${h.membaik.length?`<div class="name">Yang membaik</div>${li(h.membaik)}`:''}${h.perhatian.length?`<div class="name">Perlu perhatian</div>${li(h.perhatian)}`:''}<div class="name">Langkah kecil</div><p>${esc(h.langkah)}</p><div class="name">Untuk direnungkan</div><p>${esc(h.refleksi)}</p></div>` : '';
-  return `<div class="card"><div class="name">Ringkasan AI <span class="bd">opsional</span></div><label for="ai-goal">Tujuan Anda (opsional)</label><input id="ai-goal" maxlength="200" placeholder="Contoh: ingin tidur lebih teratur" value="${esc(A.goal)}">
-  <button class="btn pri" style="margin-top:10px;width:100%" data-act="airun" ${AIS.busy?'disabled':''}>${AIS.busy?'Membuat ringkasan...':'Buat ringkasan AI 7 hari terakhir'}</button>
-  ${AIS.err?`<div class="err" style="margin-top:8px">${esc(AIS.err)}</div>`:''}
-  <p class="mute" style="font-size:12px;margin:10px 0 0">Yang dikirim hanya angka ringkasan per kategori. Nama kegiatan dan catatan tidak dikirim. Dibuat oleh AI dan bukan nasihat medis; periksa dulu sebelum mengikuti saran.</p>
-  <button class="btn sm" style="margin-top:8px" data-act="aishow">${AIS.show?'Sembunyikan':'Lihat'} data yang dikirim</button>${AIS.show?`<pre class="aipre">${esc(JSON.stringify(aiPayload(),null,1))}</pre>`:''}${res}</div>`;
-}
-
 function viewEval(){
-  return `<h1>Evaluasi</h1><p class="sub">7 hari terakhir</p>${aiHTML()}${settings.ui.tips?habitHTML():'<div class="card empty"><p>Saran kebiasaan dimatikan. Aktifkan lagi di halaman Pengaturan.</p></div>'}
+  return `<h1>Evaluasi</h1><p class="sub">Saran dari catatan 7 hari terakhir</p>${settings.ui.tips?habitHTML():'<div class="card empty"><p>Saran kebiasaan dimatikan. Aktifkan lagi di halaman Pengaturan.</p></div>'}
   ${analisisHTML()}<div class="card"><p class="mute" style="margin:0">Kategori, tampilan, data, dan tentang aplikasi ada di halaman Pengaturan.</p><button class="btn" style="margin-top:8px" data-act="togsettings">Buka Pengaturan</button></div>`;
 }
 function analisisHTML(){ return compareHTML()+targetHTML(); }
@@ -1119,8 +1040,6 @@ function seed(){
   toast('Data contoh dimuat'); commit();
 }
 const actions = {
-  airun:()=>aiRun(),
-  aishow:()=>{ AIS.show = !AIS.show; softRender(); },
   dprev:()=>{ homeDate = shiftDay(homeDate,-1); render(); },
   dnext:()=>{ if(homeDate<todayStr()){ homeDate = shiftDay(homeDate,1); render(); } },
   dtoday:()=>{ homeDate = todayStr(); render(); },
@@ -1311,7 +1230,6 @@ document.addEventListener('input', ev=>{
 document.addEventListener('focusin', ev=>{ if((ev.target.id==='f-th'||ev.target.id==='f-tm') && ev.target.select) ev.target.select(); });
 document.addEventListener('focusout', ev=>{ const t = ev.target; if((t.id==='f-th'||t.id==='f-tm') && t.value.length===1) t.value = '0'+t.value; });
 document.addEventListener('change', ev=>{
-  if(ev.target.id==='ai-goal'){ aiData().goal = ev.target.value.trim().slice(0,200); aiSave(); }
   if(ev.target.id==='rf'){ const f = ev.target.files[0]; if(!f) return; if(f.size>5e6){ toast('File terlalu besar.'); return; } f.text().then(t=>{ document.getElementById('rs').value = t.trim(); toast('File dibaca. Ketuk Pulihkan.'); }).catch(()=>toast('File tidak bisa dibaca.')); return; }
   if(ev.target.id==='fd'){ filter.date=ev.target.value; render(); }
   if(ev.target.id==='fc'){ filter.cat=ev.target.value; render(); }
