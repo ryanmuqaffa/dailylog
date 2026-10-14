@@ -76,7 +76,7 @@ nav button.on{color:var(--acc);font-weight:700}
 nav .fab{background:var(--acc);color:#fff;width:54px;height:54px;border-radius:50%;margin:-22px auto 0;font-size:28px;justify-content:center;box-shadow:0 4px 14px rgba(0,0,0,.25)}
 .ov{position:fixed;inset:0;background:rgba(10,15,22,.55);display:flex;align-items:flex-end;justify-content:center;z-index:10}
 .sheet{background:var(--bg);width:100%;max-width:520px;max-height:92%;overflow-y:auto;border-radius:20px 20px 0 0;padding:18px 16px calc(18px + env(safe-area-inset-bottom,0px))}
-.toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:99px;font-size:14px;z-index:20}
+.toast{position:fixed;left:50%;bottom:96px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:20px;font-size:14px;z-index:20;max-width:calc(100% - 32px);text-align:center;line-height:1.4}
 .toast{pointer-events:none}.toast button{pointer-events:auto}
 .top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
 .sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
@@ -302,7 +302,7 @@ function greet(){ const h=new Date().getHours(); return h<11?'Selamat pagi':h<15
 /* ===== BAGIAN 4: STATE ===== */
 let entries = Store.load();
 entries.forEach(e=>{ if(e.demo && e.cat==='ibadah' && e.dur) e.dur=''; });   // contoh lama: Ibadah tidak punya durasi
-let homeDate = todayStr(), view = 'home', prevView = 'home', modal = null, errors = {}, toastTimer;
+let homeDate = todayStr(), view = 'home', prevView = 'home', modal = null, errors = {}, toastTimer, authBusy = false;
 const filter = { date:'', cat:'', q:'' };
 // ts = waktu ubah terakhir tiap catatan (dipakai untuk menentukan versi terbaru saat lokal dan cloud berbeda).
 const SIGF = ['id','name','cat','date','time','dur','amt','dist','rep','note','demo'];
@@ -317,11 +317,11 @@ function stamp(){
   [...stampBase.keys()].forEach(id=>{ if(!seen.has(id)){ stampBase.delete(id); if(SCOPE!=='guest') meta.tomb[id] = now; } });   // dihapus pengguna: catat agar server ikut dihapus
 }
 function commit(){ stamp(); Store.save(entries); Meta.save(); Cloud.schedule(); render(); }
-function toast(msg, undo){
+function toast(msg, undo, ms){
   clearTimeout(toastTimer); document.querySelector('.toast')?.remove();
   const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg;
   if(undo){ const b = document.createElement('button'); b.textContent = 'Urungkan'; b.style.cssText = 'margin-left:12px;background:none;border:0;color:inherit;font:inherit;font-weight:700;text-decoration:underline;min-height:32px'; b.onclick = () => { undo(); t.remove(); }; t.appendChild(b); }
-  document.body.appendChild(t); toastTimer = setTimeout(()=>t.remove(), undo ? 6000 : 2200);
+  document.body.appendChild(t); toastTimer = setTimeout(()=>t.remove(), ms || (undo ? 6000 : Math.min(7000, Math.max(2200, 1200 + msg.length*55))));
 }
 
 /* ===== BAGIAN 4B: ANALISIS KEBIASAAN (dari catatan Anda, 7 hari terakhir) ===== */
@@ -754,10 +754,24 @@ function claimSheet(){
 <div class="acts"><button class="btn pri grow" data-act="claimyes">Salin ke akun ini</button><button class="btn grow" data-act="claimno">Biarkan di perangkat</button></div></div></div>`;
 }
 const bkText = () => JSON.stringify({ v:2, entries, custom:settings.custom, over:settings.over });
-function saveFile(name, text, type){
+const capPlug = {};
+function capPlugin(n){ return capPlug[n] || (capPlug[n] = window.Capacitor.registerPlugin(n)); }
+const inApp = () => !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
+async function saveFile(name, text, type){
+  const body = (type==='text/csv' ? '\uFEFF' : '') + text;
+  if(inApp()){
+    try{
+      const r = await capPlugin('Filesystem').writeFile({ path:name, data:body, directory:'CACHE', encoding:'utf8' });
+      await capPlugin('Share').share({ title:name, url:r.uri, dialogTitle:'Simpan atau bagikan file' });
+      return;
+    }catch(e){
+      if(/cancel/i.test(String((e&&e.message)||e))) return;
+      toast('Gagal membuka menu simpan. Coba tombol Salin.'); return;
+    }
+  }
   try{
-    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text], { type:type+';charset=utf-8' })); a.download = name;
-    document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href), 3000); toast('File diunduh');
+    const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([body], { type:type+';charset=utf-8' })); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(a.href), 3000); toast('Unduhan dimulai. Jika tidak ada file, pakai tombol Salin.');
   }catch(e){ toast('Unduhan gagal. Coba tombol Salin.'); }
 }
 async function copyText(t, ok){
@@ -765,14 +779,6 @@ async function copyText(t, ok){
   try{ const x = document.createElement('textarea'); x.value = t; x.style.cssText = 'position:fixed;opacity:0'; document.body.appendChild(x); x.select(); const r = document.execCommand('copy'); x.remove(); toast(r ? ok : 'Gagal menyalin.'); }
   catch(e){ toast('Gagal menyalin.'); }
 }
-async function dl(name, data){
-  try{
-    const d = window.claude && window.claude.use ? await claude.use('downloads') : null;
-    if(!d){ toast('Unduh tidak tersedia di sini. Salin teks di bawah.'); return; }
-    await d.save({ filename:name, data }); toast('File siap disimpan');
-  }catch(e){ if(!e || e.code!=='declined') toast('Unduhan gagal. Salin teks di bawah.'); }
-}
-
 function aboutHTML(){
   return `<h2>Tentang</h2><div class="card" style="padding:16px"><div class="row"><div class="ico" style="background:var(--accbg);color:var(--acc)">${icon('logo')}</div><div class="grow"><div class="name" style="font-size:17px;font-weight:800;letter-spacing:-.2px">DailyLog</div><div class="mute">Pencatat Kegiatan Harian</div></div><span class="chip" style="margin:0">Versi 1.0</span></div><div style="height:1px;background:var(--line);margin:16px 0"></div><div style="display:flex;align-items:center;gap:16px"><img src="data:image/jpeg;base64,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" alt="Foto Muhammad Irfan" width="84" height="84" style="width:84px;height:84px;border-radius:50%;object-fit:cover;border:4px solid var(--acc);box-shadow:0 0 0 4px var(--accbg);flex:none;display:block;margin:4px"><div style="flex:1;min-width:0"><div class="mute" style="font-size:12px;font-weight:600;letter-spacing:.6px;text-transform:uppercase">Dibuat oleh</div><div style="font-size:19px;font-weight:800;letter-spacing:-.3px;line-height:1.25;margin-top:2px">Muhammad Irfan</div></div></div><div style="height:1px;background:var(--line);margin:16px 0 12px"></div><p class="mute" style="margin:0 0 8px;font-size:12.5px;line-height:1.55">Catatan Anda tersimpan di perangkat. Setelah masuk, catatan juga tersimpan di akun dan tersinkron ke perangkat lain. Email hanya dipakai untuk masuk ke akun.</p><p class="mute" style="margin:0 0 8px;font-size:12.5px;line-height:1.55">Pasang DailyLog ke layar utama lewat menu browser agar bisa dibuka seperti aplikasi.</p><p class="mute" style="margin:0;font-size:12.5px;line-height:1.55">Saran kebiasaan bersifat umum dan bukan nasihat medis.</p></div>`;
 }
@@ -988,9 +994,43 @@ function loginSheet(){
   <p class="mute">Masuk agar catatan tersimpan di akun dan bisa dibuka dari perangkat lain.</p>
   <label for="lg-e">Email</label><input id="lg-e" type="email" inputmode="email" autocomplete="username" autocapitalize="none" value="${esc(modal.email||'')}">
   <label for="lg-p">Kata sandi</label><input id="lg-p" type="password" autocomplete="current-password">
+  <div style="text-align:right;margin-top:2px"><button class="q" data-act="openforgot" style="background:none;color:var(--acc);padding:6px 2px">Lupa kata sandi?</button></div>
   ${errors.login?`<div class="err" role="alert">${esc(errors.login)}</div>`:''}
   <div class="acts" style="margin-top:14px"><button class="btn pri grow" data-act="dologin">Masuk</button><button class="btn" data-act="close">Batal</button></div>
   <p class="mute" style="text-align:center;margin:14px 0 0">Belum punya akun? <button class="q" data-act="openreg" style="background:none;color:var(--acc);padding:4px 6px">Daftar</button></p></div></div>`;
+}
+function forgotSheet(){
+  const er = errors.forgot ? `<div class="err" role="alert">${esc(errors.forgot)}</div>` : '';
+  if(modal.step!==2) return `<div class="ov" data-act="close"><div class="sheet"><h1 style="font-size:20px">Lupa kata sandi</h1>
+  <p class="mute">Masukkan email akun Anda. Kami kirim kode verifikasi ke email itu.</p>
+  <label for="fg-e">Email</label><input id="fg-e" type="email" inputmode="email" autocomplete="username" autocapitalize="none" value="${esc(modal.email||'')}">
+  ${er}
+  <div class="acts" style="margin-top:14px"><button class="btn pri grow" data-act="sendotp">Kirim kode</button><button class="btn" data-act="openlogin">Kembali</button></div></div></div>`;
+  const hasTok = !!modal.tok;
+  return `<div class="ov"><div class="sheet"><h1 style="font-size:20px">Atur kata sandi baru</h1>
+  <p class="mute">${hasTok ? 'Kode sudah diterima. Tinggal isi kata sandi baru.' : 'Jika ' + esc(modal.email) + ' terdaftar, kode verifikasi sudah dikirim. Cek juga folder spam. Kode hanya berlaku sebentar.'}</p>
+  ${hasTok ? '' : `<label for="fg-c">Kode dari email</label><input id="fg-c" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="Contoh: 123456" value="${esc(modal.code||'')}">`}
+  <label for="fg-p">Kata sandi baru</label><input id="fg-p" type="password" autocomplete="new-password">
+  <div class="mute" style="margin-top:4px">Minimal 8 karakter, berisi huruf dan angka.</div>
+  ${er}
+  <div class="acts" style="margin-top:14px"><button class="btn pri grow" data-act="resetpw">Simpan kata sandi</button><button class="btn" data-act="close">Batal</button></div>
+  ${hasTok ? '' : `<p class="mute" style="text-align:center;margin:14px 0 0">Kode belum masuk? <button class="q" data-act="resendotp" style="background:none;color:var(--acc);padding:4px 6px">Kirim ulang</button></p>`}</div></div>`;
+}
+async function sendRecover(email, step){
+  if(authBusy) return;
+  authBusy = true; toast('Mengirim kode...', null, 30000);
+  const keep = step===2 ? { code:(document.getElementById('fg-c')||{}).value||'' } : {};
+  const back = msg => { document.querySelector('.toast')?.remove(); modal = { type:'forgot', step, email, ...keep }; errors = { forgot:msg }; render(); };
+  try{
+    const r = await fetch(SB_URL+'/auth/v1/recover', { method:'POST', headers:{ apikey:SB_KEY, 'Content-Type':'application/json' }, body:JSON.stringify({ email }) });
+    const j = await r.json().catch(()=>({}));
+    const m = String(j.msg||j.message||j.error_code||'').toLowerCase();
+    if(r.status===429 || m.includes('rate') || m.includes('seconds')) return back('Terlalu sering meminta kode. Tunggu sekitar satu menit lalu coba lagi.');
+    if(!r.ok) return back('Gagal mengirim kode (kode ' + r.status + '). Coba lagi nanti.');
+    modal = { type:'forgot', step:2, email }; errors = {}; render();
+    toast(step===2 ? 'Kode baru sudah dikirim. Cek email Anda.' : 'Kode sudah dikirim. Cek email Anda.');
+  }catch(e){ back('Tidak bisa terhubung ke server. Periksa koneksi internet Anda lalu coba lagi.'); }
+  finally{ authBusy = false; }
 }
 function confirmSheet(msg, act){
   return `<div class="ov" data-act="close"><div class="sheet"><h1 style="font-size:20px">${msg}</h1><p class="mute">Tindakan ini tidak dapat dibatalkan.</p>
@@ -1008,7 +1048,7 @@ function render(){
     : `<button class="${view===k?'on':''}" data-act="nav" data-v="${k}"><b>${icon(k)}</b>${l}</button>`).join('');
   const m = document.getElementById('modal');
   m.innerHTML = !modal ? '' : modal.type==='form' ? formSheet()
-    : modal.type==='entry' ? entrySheet() : modal.type==='delcat' ? confirmSheet('Hapus kategori ini? Catatannya dipindah ke Lainnya.','dodelcat') : modal.type==='name' ? nameSheet() : modal.type==='claim' ? claimSheet() : modal.type==='login' ? loginSheet() : modal.type==='register' ? registerSheet() : modal.type==='hidecfm' ? confirmSheet('Hapus kategori ini dari daftar? Catatan lamanya tetap tersimpan, dan kategori bisa ditambahkan lagi lewat + Tambah kategori.','dohidecat') : modal.type==='cat' ? catSheet() : modal.type==='backup' ? backupSheet() : modal.type==='del' ? confirmSheet('Hapus catatan ini?','dodel') : confirmSheet('Hapus semua data?','doclear');
+    : modal.type==='entry' ? entrySheet() : modal.type==='delcat' ? confirmSheet('Hapus kategori ini? Catatannya dipindah ke Lainnya.','dodelcat') : modal.type==='name' ? nameSheet() : modal.type==='claim' ? claimSheet() : modal.type==='login' ? loginSheet() : modal.type==='forgot' ? forgotSheet() : modal.type==='register' ? registerSheet() : modal.type==='hidecfm' ? confirmSheet('Hapus kategori ini dari daftar? Catatan lamanya tetap tersimpan, dan kategori bisa ditambahkan lagi lewat + Tambah kategori.','dohidecat') : modal.type==='cat' ? catSheet() : modal.type==='backup' ? backupSheet() : modal.type==='del' ? confirmSheet('Hapus catatan ini?','dodel') : confirmSheet('Hapus semua data?','doclear');
 }
 
 /* ===== BAGIAN 7: AKSI PENGGUNA ===== */
@@ -1073,6 +1113,55 @@ const actions = {
   skipname:()=>{ try{ localStorage.setItem('dailylog:noname','1'); }catch(e){} modal = null; errors = {}; render(); },
   openlogin:()=>{ modal={type:'login'}; errors={}; render(); },
   openreg:()=>{ modal={ type:'register' }; errors={}; render(); },
+  openforgot:()=>{ const e = document.getElementById('lg-e'); modal={ type:'forgot', step:1, email:e?e.value.trim():'' }; errors={}; render(); },
+  sendotp:async()=>{
+    if(!document.getElementById('fg-e')) return;
+    const email = val('fg-e').trim();
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)){ modal={ type:'forgot', step:1, email }; errors={ forgot:'Masukkan alamat email yang valid.' }; render(); return; }
+    await sendRecover(email, 1);
+  },
+  resendotp:async()=>{ if(modal && modal.type==='forgot' && modal.email) await sendRecover(modal.email, 2); },
+  resetpw:async()=>{
+    if(!document.getElementById('fg-p') || !modal || modal.type!=='forgot') return;
+    const email = modal.email, pw = val('fg-p'), hasTok = !!modal.tok;
+    const code = hasTok ? '' : val('fg-c').replace(/\s/g,'');
+    const fail = (msg, newTok) => { authBusy = false; document.querySelector('.toast')?.remove(); const t = newTok===undefined ? (hasTok ? modal.tok : undefined) : (newTok || undefined); modal = { type:'forgot', step:2, email, code, tok:t }; errors = { forgot:msg }; render(); };
+    if(!hasTok && !/^\d{6,10}$/.test(code)) return fail('Masukkan kode berupa angka yang dikirim ke email Anda.');
+    if(pw.length<8 || !/[A-Za-z]/.test(pw) || !/\d/.test(pw)) return fail('Kata sandi minimal 8 karakter, berisi huruf dan angka.');
+    if(authBusy) return;
+    authBusy = true; toast('Memproses...', null, 30000);
+    let tok = hasTok ? modal.tok : '';
+    try{
+      if(!tok){
+        const r = await fetch(SB_URL+'/auth/v1/verify', { method:'POST', headers:{ apikey:SB_KEY, 'Content-Type':'application/json' }, body:JSON.stringify({ type:'recovery', email, token:code }) });
+        const j = await r.json().catch(()=>({}));
+        if(r.status===429) return fail('Terlalu banyak percobaan. Tunggu sebentar lalu coba lagi.');
+        if(!r.ok || !j.access_token) return fail('Kode salah atau sudah kedaluwarsa. Periksa lagi, atau ketuk Kirim ulang untuk kode baru.');
+        tok = j.access_token;
+      }
+      const r2 = await fetch(SB_URL+'/auth/v1/user', { method:'PUT', headers:{ apikey:SB_KEY, Authorization:'Bearer '+tok, 'Content-Type':'application/json' }, body:JSON.stringify({ password:pw }) });
+      const j2 = await r2.json().catch(()=>({}));
+      if(!r2.ok){
+        const m = String(j2.msg||j2.message||j2.error_code||'').toLowerCase();
+        const expired = r2.status===401 || r2.status===403;   // kode sudah terpakai; kalau token masih sah, simpan agar tidak perlu minta kode baru
+        return fail(m.includes('same') || m.includes('different') ? 'Kata sandi baru harus berbeda dari yang lama.'
+          : r2.status===429 ? 'Terlalu banyak percobaan. Tunggu sebentar lalu coba lagi.'
+          : m.includes('weak') || m.includes('password') ? 'Kata sandi ditolak: terlalu lemah atau terlalu umum. Coba kata sandi lain.'
+          : r2.status===401 || r2.status===403 ? 'Sesi pemulihan berakhir. Ketuk Batal, lalu minta kode baru.'
+          : 'Gagal menyimpan kata sandi baru (kode ' + r2.status + '). Coba lagi.', expired ? null : tok);
+      }
+    }catch(e){ return fail('Tidak bisa terhubung ke server. Periksa koneksi internet Anda lalu coba lagi.', tok || undefined); }
+    try{
+      await sbAuth('password', { email, password:pw });
+      modal = null; errors = {}; Cloud.st = 'sync'; render();
+      await Cloud.enter(); toast('Kata sandi berhasil diubah dan Anda sudah masuk');
+    }catch(e){
+      document.querySelector('.toast')?.remove();
+      modal = { type:'login', email }; errors = { login:'Kata sandi sudah diubah, tetapi masuk otomatis gagal. Silakan masuk dengan kata sandi baru.' }; render();
+    }
+    finally{ authBusy = false; }
+  },
+
   doreg:async()=>{
     if(!document.getElementById('rg-e')) return;
     const n = val('rg-n').trim(), email = val('rg-e').trim(), pw = val('rg-p');
@@ -1080,8 +1169,9 @@ const actions = {
       : !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email) ? 'Masukkan alamat email yang valid.'
       : (pw.length<8 || !/[A-Za-z]/.test(pw) || !/\d/.test(pw)) ? 'Kata sandi minimal 8 karakter, berisi huruf dan angka.' : '';
     if(bad){ modal={ type:'register', n, email }; errors={ reg:bad }; render(); return; }
-    toast('Mendaftarkan...');
-    const fail = msg => { modal={ type:'register', n, email }; errors={ reg:msg }; render(); };
+    if(authBusy) return;
+    authBusy = true; toast('Mendaftarkan akun...', null, 30000);
+    const fail = msg => { document.querySelector('.toast')?.remove(); modal={ type:'register', n, email }; errors={ reg:msg }; render(); };
     try{
       const r = await fetch(SB_URL+'/auth/v1/signup', { method:'POST', headers:{ apikey:SB_KEY, 'Content-Type':'application/json' }, body:JSON.stringify({ email, password:pw, data:{ name:n } }) });
       const j = await r.json().catch(()=>({}));
@@ -1091,44 +1181,51 @@ const actions = {
       if(!r.ok){
         return fail(r.status===429 || m.includes('rate') ? 'Terlalu banyak percobaan. Tunggu sebentar lalu coba lagi.'
           : m.includes('password') ? 'Kata sandi ditolak: terlalu lemah atau terlalu umum.'
-          : 'Pendaftaran gagal (' + r.status + ')' + (j.msg||j.message ? ': ' + (j.msg||j.message) : '.'));
+          : 'Pendaftaran gagal (kode ' + r.status + '). Coba lagi nanti.');
       }
       if(!settings.name){ settings.name = n; saveSettings(); }
-      if(!j.access_token){ modal = null; errors = {}; render(); toast('Cek email ' + email + ' untuk konfirmasi, lalu masuk.'); return; }
+      if(!j.access_token){ modal = null; errors = {}; render(); toast('Kami mengirim email konfirmasi ke ' + email + '. Ketuk tautan di dalamnya, lalu kembali ke sini dan masuk.'); return; }
       await sbAuth('password', { email, password:pw });
       modal = null; errors = {}; Cloud.st = 'sync'; render();
-      await Cloud.enter(); if(!settings.name){ settings.name = n; saveSettings(); } toast('Akun dibuat dan sudah masuk');
-    }catch(e){ fail('Tidak bisa terhubung ke server. Periksa koneksi internet lalu coba lagi.'); }
+      await Cloud.enter(); if(!settings.name){ settings.name = n; saveSettings(); } toast('Akun berhasil dibuat dan Anda sudah masuk');
+    }catch(e){ fail('Tidak bisa terhubung ke server. Periksa koneksi internet Anda lalu coba lagi.'); }
+    finally{ authBusy = false; }
   },
   dologin:async()=>{
     if(!document.getElementById('lg-e')) return;
     const email = val('lg-e').trim(), pw = val('lg-p');
     if(!email || !pw){ modal={ type:'login', email }; errors={ login:'Email dan kata sandi wajib diisi.' }; render(); return; }
-    toast('Masuk...');
+    if(authBusy) return;
+    authBusy = true; toast('Sedang masuk...', null, 30000);
     try{
       await sbAuth('password', { email, password:pw });
       modal = null; errors = {}; Cloud.st = 'sync'; render();
-      await Cloud.enter(); toast(Cloud.st==='err' ? 'Berhasil masuk, tetapi belum tersinkron. Data aman di perangkat dan akan dicoba lagi.' : 'Berhasil masuk');
+      await Cloud.enter(); toast(Cloud.st==='err' ? 'Anda sudah masuk, tetapi catatan belum tersinkron. Data aman di perangkat dan akan dicoba lagi otomatis.' : 'Berhasil masuk');
     }catch(e){
+      document.querySelector('.toast')?.remove();
       modal = { type:'login', email };
       const m = String(e.message||'').toLowerCase();
       errors = { login: !e.status ? 'Tidak bisa terhubung ke server. Periksa koneksi internet Anda lalu coba lagi.'
         : e.status===429 || m.includes('rate limit') ? 'Terlalu banyak percobaan. Tunggu sebentar lalu coba lagi.'
         : m.includes('not confirmed') ? 'Email belum dikonfirmasi. Buka email dari DailyLog dan ketuk tautan konfirmasinya, lalu masuk lagi.'
-        : m.includes('invalid login') ? 'Email atau kata sandi salah. Belum punya akun? Ketuk Daftar di bawah.'
-        : e.status===401 || e.status===403 ? 'Akses ditolak (' + e.status + '). Muat ulang halaman lalu coba lagi.'
-        : 'Gagal masuk (' + e.status + '). Coba lagi nanti.' };
+        : m.includes('invalid login') ? 'Email atau kata sandi salah. Periksa lagi, ketuk "Lupa kata sandi?" jika lupa, atau Daftar jika belum punya akun.'
+        : e.status===401 || e.status===403 ? 'Akses ditolak (kode ' + e.status + '). Tutup lalu buka lagi aplikasi, kemudian coba masuk lagi.'
+        : 'Gagal masuk (kode ' + e.status + '). Coba lagi nanti.' };
       render();
     }
+    finally{ authBusy = false; }
   },
   logout:async()=>{
     if(!Cloud.sess) return;
-    if(meta.dirty){ toast('Menyimpan catatan terakhir...'); try{ await Promise.race([Cloud.sync(true), new Promise(r=>setTimeout(r,8000))]); }catch(e){} }
+    if(authBusy) return;
+    if(meta.dirty){ toast('Menyimpan catatan terakhir sebelum keluar...', null, 9000); try{ await Promise.race([Cloud.sync(true), new Promise(r=>setTimeout(r,8000))]); }catch(e){} }
     const pending = meta.dirty;
     Cloud.gen++; Cloud.abort(); clearTimeout(Cloud.timer);
+    const oldTok = Cloud.sess.token;
+    try{ fetch(SB_URL+'/auth/v1/logout?scope=local', { method:'POST', keepalive:true, headers:{ apikey:SB_KEY, Authorization:'Bearer '+oldTok } }).catch(()=>{}); }catch(e){}   // cabut sesi di server (upaya terbaik; gagal pun tidak masalah)
     Cloud.sess = null; sbSave(); Cloud.st = 'off';
     switchScope('guest');                       // data akun TIDAK dihapus; tetap di kunci per-akun dan muncul lagi saat masuk
-    toast(pending ? 'Anda keluar. Ada catatan belum tersinkron; tetap tersimpan di perangkat dan dikirim saat Anda masuk lagi.' : 'Anda sudah keluar. Catatan akun tersimpan di perangkat dan tampil lagi saat Anda masuk.');
+    toast(pending ? 'Anda sudah keluar. Sebagian catatan belum sempat terkirim ke akun. Catatan tetap ada di perangkat ini dan akan dikirim saat Anda masuk lagi.' : 'Anda sudah keluar. Catatan akun tetap tersimpan di perangkat ini dan tampil lagi saat Anda masuk.');
   },
   claimyes:()=>{
     const c = Claim.cands();
@@ -1218,7 +1315,7 @@ document.addEventListener('click', ev=>{
   if(t && t.classList.contains('ov') && ev.target!==t) return; // klik di dalam kotak dialog tidak menutupnya
   if(t && actions[t.dataset.act]) actions[t.dataset.act](t);
 });
-document.addEventListener('keydown', ev=>{ if(ev.key==='Escape' && modal){ modal=null; errors={}; render(); } if(ev.key==='Enter' && (ev.target.id==='lg-p'||ev.target.id==='lg-e')) actions.dologin(); if(ev.key==='Enter' && ev.target.id==='nm') actions.savename(); if(ev.key==='Enter' && ['rg-n','rg-e','rg-p'].includes(ev.target.id)) actions.doreg(); });
+document.addEventListener('keydown', ev=>{ if(ev.key==='Escape' && modal){ modal=null; errors={}; render(); } if(ev.key==='Enter' && (ev.target.id==='lg-p'||ev.target.id==='lg-e')) actions.dologin(); if(ev.key==='Enter' && ev.target.id==='nm') actions.savename(); if(ev.key==='Enter' && ev.target.id==='fg-e') actions.sendotp(); if(ev.key==='Enter' && ['fg-c','fg-p'].includes(ev.target.id)) actions.resetpw(); if(ev.key==='Enter' && ['rg-n','rg-e','rg-p'].includes(ev.target.id)) actions.doreg(); });
 document.addEventListener('input', ev=>{
   const t = ev.target; if(t.id!=='f-th' && t.id!=='f-tm') return;
   t.value = t.value.replace(/\D/g,'').slice(0,2);
